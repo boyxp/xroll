@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ececee;
+  --sidebar: #e8e8ea;
+  --panel: #ffffff;
+  --line: #dcdcdf;
+  --text: #1d1d1f;
+  --text2: #6e6e73;
+  --text3: #98989d;
+  --text4: #b8b8bd;
+  --accent: #0a84ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue',
+    sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+  background-clip: padding-box;
+}
+
+input,
+button {
+  font-family: inherit;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+.drag {
+  -webkit-app-region: drag;
+}
+
+/* spinner */
+@keyframes sp {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #444;
+  border-top-color: #999;
+  border-radius: 50%;
+  animation: sp 1s linear infinite;
+}

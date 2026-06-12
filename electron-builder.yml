@@ -1,0 +1,35 @@
+appId: com.junlee.video-asset-manager
+productName: 视频素材管理
+directories:
+  output: dist
+  buildResources: build
+
+# 只打包构建产物 + 运行时依赖
+files:
+  - out/**
+  - package.json
+
+# 原生模块 / 自带二进制必须从 asar 解包，否则运行时找不到
+# media.ts 会把 app.asar 路径改写为 app.asar.unpacked 来定位 ffmpeg/ffprobe
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+  - '**/node_modules/ffmpeg-static/**'
+  - '**/node_modules/ffprobe-static/**'
+
+# 用目标 Electron 版本重建原生模块（better-sqlite3）
+npmRebuild: true
+
+mac:
+  category: public.app-category.video
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # 个人本地使用，不做签名/公证
+  identity: null
+
+dmg:
+  title: ${productName}
+
+# 个人构建，禁用自动签名相关流程
+afterSign: null
