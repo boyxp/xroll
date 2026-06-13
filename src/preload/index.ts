@@ -7,6 +7,7 @@ const api = {
 
   // folders
   listFolders: () => ipcRenderer.invoke('folders:list'),
+  missingFolders: () => ipcRenderer.invoke('folders:missing'),
   importFolder: (opts: unknown) => ipcRenderer.invoke('folders:import', opts),
   updateFolder: (id: number, patch: unknown) => ipcRenderer.invoke('folders:update', id, patch),
   deleteFolder: (id: number) => ipcRenderer.invoke('folders:delete', id),

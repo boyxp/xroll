@@ -23,11 +23,17 @@ export function Toolbar(): JSX.Element {
       const res = (await api.exportFcpxml(program.id)) as {
         canceled?: boolean
         empty?: boolean
+        missing?: string[]
         path?: string
         count?: number
       }
       if (res.empty) {
         alert('当前节目还没有素材可导出')
+      } else if (res.missing && res.missing.length) {
+        const names = res.missing
+        const head = names.slice(0, 5).join('\n')
+        const more = names.length > 5 ? `\n…等共 ${names.length} 个素材` : ''
+        alert(`以下素材无法访问，无法导出：\n\n${head}${more}\n\n请检查设备是否断开或文件是否被移动/删除后重试。`)
       } else if (!res.canceled) {
         alert(`已按当前排序导出 ${res.count} 个素材到：\n${res.path}\n\n可在 Final Cut Pro 或 DaVinci Resolve 中导入。`)
         await useStore.getState().refreshSidebar()

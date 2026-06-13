@@ -36,6 +36,7 @@ interface AppState {
   activeProgram: { id: number; name: string } | null
   materials: Material[]
   loading: boolean
+  missingFolders: Set<number> // 路径已失效的文件夹 id
 
   filters: Filters
   viewMode: 'grid' | 'list'
@@ -103,6 +104,7 @@ export const useStore = create<AppState>((set, get) => ({
   activeProgram: null,
   materials: [],
   loading: false,
+  missingFolders: new Set(),
 
   filters: { statuses: ['unused', 'used'], period: 'all', dates: [], devices: [], locations: [], tags: [] },
   viewMode: 'grid',
@@ -134,14 +136,15 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   refreshSidebar: async () => {
-    const [folders, programs, tags, stages, devices] = await Promise.all([
+    const [folders, programs, tags, stages, devices, missing] = await Promise.all([
       api.listFolders(),
       api.listPrograms(),
       api.listTags(),
       api.listStages(),
-      api.listDevices()
+      api.listDevices(),
+      api.missingFolders() as Promise<number[]>
     ])
-    set({ folders, programs, tags, stages, devices })
+    set({ folders, programs, tags, stages, devices, missingFolders: new Set(missing) })
   },
 
   refreshOptions: async () => {

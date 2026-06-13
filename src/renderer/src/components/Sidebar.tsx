@@ -10,6 +10,8 @@ export function Sidebar(): JSX.Element {
   const folders = useStore((s) => s.folders)
   const programs = useStore((s) => s.programs)
   const view = useStore((s) => s.view)
+  const activeProgram = useStore((s) => s.activeProgram)
+  const missingFolders = useStore((s) => s.missingFolders)
   const importProgress = useStore((s) => s.importProgress)
   const selection = useStore((s) => s.selection)
   const materials = useStore((s) => s.materials)
@@ -47,7 +49,11 @@ export function Sidebar(): JSX.Element {
     <div className="w-[232px] bg-[var(--sidebar)] border-r-[0.5px] border-[var(--line)] flex flex-col flex-shrink-0">
       <div className="h-[38px] drag flex-shrink-0" />
       <div className="flex-1 overflow-auto px-[10px] pb-2">
-        <GroupHead title="素材文件夹" onAdd={() => setShowAddFolder(true)} />
+        <GroupHead
+          title="素材文件夹"
+          onAdd={() => setShowAddFolder(true)}
+          onRefresh={() => void useStore.getState().refreshSidebar()}
+        />
         <Row
           icon="🗂️"
           label="全部素材"
@@ -58,11 +64,13 @@ export function Sidebar(): JSX.Element {
         {folders.map((f) => {
           const ip = importProgress[f.id]
           const importing = ip && ip.phase !== 'done'
+          const broken = missingFolders.has(f.id)
           return (
             <Row
               key={f.id}
-              icon="📁"
+              icon={broken ? '⛓️‍💥' : '📁'}
               label={f.name}
+              broken={broken}
               meta={importing ? undefined : f.shootDate ? mmdd(f.shootDate) : ''}
               spinner={importing}
               active={view.type === 'folder' && view.id === f.id}
@@ -72,28 +80,41 @@ export function Sidebar(): JSX.Element {
         })}
 
         <GroupHead title="节目" onAdd={() => setShowAddProgram(true)} />
-        {programs.map((p) => (
-          <Row
-            key={p.id}
-            icon="🎬"
-            label={p.name}
-            bg={p.stageColor ? tint(p.stageColor) : undefined}
-            stage={p.stageName ?? undefined}
-            stageColor={p.stageColor ?? undefined}
-            active={view.type === 'program' && view.id === p.id}
-            onClick={() => useStore.getState().openProgram(p.id)}
-            dragActive={dragOverProgram === p.id}
-            dragBadge={dragOverProgram === p.id ? newCountFor(p.id) : undefined}
-            onDragOver={(e) => {
-              if (!isMaterialDrag(e)) return
-              e.preventDefault()
-              e.dataTransfer.dropEffect = 'copy'
-              if (dragOverProgram !== p.id) setDragOverProgram(p.id)
-            }}
-            onDragLeave={() => setDragOverProgram((cur) => (cur === p.id ? null : cur))}
-            onDrop={(e) => void onProgramDrop(p.id, e)}
-          />
-        ))}
+        {programs.map((p) => {
+          // 「打开中」的节目（最后打开 = 正在为其挑选素材）：高亮强调，其余灰底
+          const opened = activeProgram?.id === p.id
+          const viewing = view.type === 'program' && view.id === p.id
+          const bg = opened
+            ? p.stageColor
+              ? tint(p.stageColor, 0.22)
+              : '#e6effb'
+            : 'rgba(0,0,0,0.045)'
+          return (
+            <Row
+              key={p.id}
+              icon={opened ? '📥' : '🎬'}
+              label={p.name}
+              opened={opened}
+              flag={opened}
+              count={opened ? selection.size : undefined}
+              ring={viewing}
+              bg={bg}
+              stage={p.stageName ?? undefined}
+              stageColor={p.stageColor ?? undefined}
+              onClick={() => useStore.getState().openProgram(p.id)}
+              dragActive={dragOverProgram === p.id}
+              dragBadge={dragOverProgram === p.id ? newCountFor(p.id) : undefined}
+              onDragOver={(e) => {
+                if (!isMaterialDrag(e)) return
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'copy'
+                if (dragOverProgram !== p.id) setDragOverProgram(p.id)
+              }}
+              onDragLeave={() => setDragOverProgram((cur) => (cur === p.id ? null : cur))}
+              onDrop={(e) => void onProgramDrop(p.id, e)}
+            />
+          )
+        })}
       </div>
 
       <div className="px-[10px] py-2 border-t-[0.5px] border-[var(--line)]">
@@ -111,16 +132,35 @@ export function Sidebar(): JSX.Element {
   )
 }
 
-function GroupHead({ title, onAdd }: { title: string; onAdd: () => void }): JSX.Element {
+function GroupHead({
+  title,
+  onAdd,
+  onRefresh
+}: {
+  title: string
+  onAdd: () => void
+  onRefresh?: () => void
+}): JSX.Element {
   return (
     <div className="flex items-center justify-between px-2 pt-3 pb-1">
       <span className="text-[11px] font-bold tracking-wide text-[var(--text3)] uppercase">{title}</span>
-      <div
-        className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center text-[var(--text2)] cursor-pointer text-[15px] hover:bg-black/5"
-        onClick={onAdd}
-        title={'添加'}
-      >
-        ＋
+      <div className="flex items-center gap-[2px]">
+        {onRefresh && (
+          <div
+            className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center text-[var(--text2)] cursor-pointer text-[12px] hover:bg-black/5"
+            onClick={onRefresh}
+            title={'刷新文件夹状态'}
+          >
+            ↻
+          </div>
+        )}
+        <div
+          className="w-[18px] h-[18px] rounded-[5px] flex items-center justify-center text-[var(--text2)] cursor-pointer text-[15px] hover:bg-black/5"
+          onClick={onAdd}
+          title={'添加'}
+        >
+          ＋
+        </div>
       </div>
     </div>
   )
@@ -135,6 +175,11 @@ function Row({
   bg,
   active,
   spinner,
+  opened,
+  flag,
+  count,
+  broken,
+  ring,
   onClick,
   dragActive,
   dragBadge,
@@ -150,6 +195,11 @@ function Row({
   bg?: string
   active?: boolean
   spinner?: boolean
+  opened?: boolean // 节目：当前打开中（强调样式）
+  flag?: boolean // 节目：显示 🚩（正在为其挑选素材）
+  count?: number // 节目：已选中素材数量
+  broken?: boolean // 文件夹：路径失效
+  ring?: boolean // 描边强调（正在浏览）
   onClick: () => void
   dragActive?: boolean
   dragBadge?: number
@@ -164,12 +214,34 @@ function Row({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       style={!active && bg ? { background: bg } : undefined}
-      className={`flex items-center gap-2 px-2 py-[6px] rounded-md text-[13px] cursor-pointer mb-[2px] ${
-        active ? 'bg-accent text-white' : 'hover:brightness-[0.97]'
+      className={`flex items-center gap-2 px-2 ${opened ? 'py-[9px]' : 'py-[6px]'} rounded-md ${
+        opened ? 'text-[14px]' : 'text-[13px]'
+      } cursor-pointer mb-[2px] ${active ? 'bg-accent text-white' : 'hover:brightness-[0.97]'} ${
+        ring && !active ? 'ring-2 ring-inset ring-accent' : ''
       } ${dragActive ? 'ring-2 ring-inset ring-accent !bg-[#eaf3ff]' : ''}`}
     >
-      <span className="text-sm w-4 text-center opacity-85">{icon}</span>
-      <span className="truncate">{label}</span>
+      <span className="text-sm w-4 text-center opacity-85 flex-shrink-0">{icon}</span>
+      <span className={`truncate ${opened ? 'font-semibold' : ''} ${broken ? 'text-[var(--text3)]' : ''}`}>
+        {label}
+      </span>
+      {flag && (
+        <span className="flex-shrink-0 text-[12px]" title="正在为此节目挑选素材">
+          🚩
+        </span>
+      )}
+      {count !== undefined && count > 0 && (
+        <span
+          className="flex-shrink-0 text-[10px] font-bold px-[6px] py-[1px] rounded-full bg-accent text-white"
+          title="已选中素材数量"
+        >
+          {count}
+        </span>
+      )}
+      {broken && (
+        <span className="flex-shrink-0 text-[12px]" title="文件夹路径失效（设备断开 / 被移动改名 / 已删除）">
+          ⚠️
+        </span>
+      )}
       {dragActive && dragBadge !== undefined && (
         <span
           className={`text-[10px] font-bold px-[5px] py-[1px] rounded-full flex-shrink-0 ${
@@ -183,7 +255,7 @@ function Row({
       {stage && (
         <span
           style={{ background: active ? 'rgba(255,255,255,0.28)' : stageColor }}
-          className="ml-auto text-[10px] px-[6px] py-[1px] rounded-md text-white"
+          className="ml-auto text-[10px] px-[6px] py-[1px] rounded-md text-white flex-shrink-0"
         >
           {stage}
         </span>
@@ -239,11 +311,11 @@ function mmdd(date: string): string {
   return Number(y) === now ? `${m}-${d}` : date
 }
 
-function tint(hex: string): string {
+function tint(hex: string, alpha = 0.12): string {
   // 将进度色淡化为行底色
   const c = hex.replace('#', '')
   const r = parseInt(c.slice(0, 2), 16)
   const g = parseInt(c.slice(2, 4), 16)
   const b = parseInt(c.slice(4, 6), 16)
-  return `rgba(${r},${g},${b},0.12)`
+  return `rgba(${r},${g},${b},${alpha})`
 }

@@ -1,5 +1,5 @@
 import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
-import { promises as fsp } from 'fs'
+import { existsSync, promises as fsp } from 'fs'
 import { join } from 'path'
 import * as dbm from './db'
 import { importFolder, processFolder } from './importer'
@@ -19,6 +19,13 @@ export function registerIpc(): void {
 
   /* folders */
   ipcMain.handle('folders:list', () => dbm.listFolders())
+  // 返回路径已失效（移动硬盘拔出 / 改名 / 移动 / 删除）的文件夹 id
+  ipcMain.handle('folders:missing', () =>
+    dbm
+      .listFolders()
+      .filter((f) => !existsSync(f.path))
+      .map((f) => f.id)
+  )
   ipcMain.handle('folders:import', (_e, opts) => importFolder(opts))
   ipcMain.handle('folders:update', (_e, id: number, patch) => {
     dbm.updateFolder(id, patch)
@@ -134,6 +141,10 @@ export function registerIpc(): void {
     if (!program) throw new Error('节目不存在')
     const mats = dbm.programOrderedMaterials(programId)
     if (!mats.length) return { canceled: false, empty: true }
+
+    // 导出前校验每个源文件仍可访问，发现失效（硬盘拔出 / 移动 / 删除）即中止
+    const missing = mats.filter((m) => !existsSync(m.path)).map((m) => m.fileName)
+    if (missing.length) return { canceled: false, missing }
 
     const safeName = program.name.replace(/[/\\:*?"<>|]/g, '_')
     const res = await dialog.showSaveDialog(win, {

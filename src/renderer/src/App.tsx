@@ -13,6 +13,12 @@ export default function App(): JSX.Element {
   const viewMode = useStore((s) => s.viewMode)
   const preview = useStore((s) => s.preview)
   const settingsOpen = useStore((s) => s.settingsOpen)
+  const folders = useStore((s) => s.folders)
+  const missingFolders = useStore((s) => s.missingFolders)
+  const brokenFolder =
+    view.type === 'folder' && view.id !== null && missingFolders.has(view.id)
+      ? (folders.find((f) => f.id === view.id) ?? null)
+      : null
 
   useEffect(() => {
     void useStore.getState().bootstrap()
@@ -44,6 +50,17 @@ export default function App(): JSX.Element {
       <div className="flex-1 flex flex-col min-w-0">
         <Toolbar />
         {view.type !== null && <FilterBar />}
+        {brokenFolder && (
+          <div className="flex items-start gap-2 px-4 py-[10px] bg-[#fff4e5] border-b-[0.5px] border-[#f0d9b0] text-[12px] text-[#8a5a00]">
+            <span className="text-[14px] leading-none mt-[1px]">⛓️‍💥</span>
+            <div>
+              <div className="font-semibold">「{brokenFolder.name}」的素材当前无法访问</div>
+              <div className="text-[#9a6a1a] mt-[2px]">
+                该文件夹所在设备可能已断开（移动硬盘拔出），或文件夹被移动、改名、删除。请重新连接设备或恢复路径后再浏览；缩略图仍可查看，但预览与导出将不可用。
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex-1 overflow-auto">
           {view.type === null ? (
             <div className="text-[var(--text3)] text-sm text-center pt-32">在左侧选择文件夹或节目浏览素材</div>
