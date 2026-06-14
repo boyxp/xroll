@@ -3,7 +3,7 @@ import { existsSync, promises as fsp } from 'fs'
 import { join } from 'path'
 import * as dbm from './db'
 import { importFolder, processFolder } from './importer'
-import { probeFps, probeStartTimecode } from './media'
+import { probeFps, probeStartTimecode, probeFrameCount } from './media'
 import { reconcile as previewReconcile, resume as previewResume } from './preview'
 import { buildFcpxml } from './fcpxml'
 import { thumbnailsDir } from './paths'
@@ -159,7 +159,8 @@ export function registerIpc(): void {
     for (const m of mats) {
       const fps = await probeFps(m.path)
       const startTime = await probeStartTimecode(m.path, fps)
-      clips.push({ material: m, fps, startTime })
+      const frames = await probeFrameCount(m.path, fps)
+      clips.push({ material: m, fps, startTime, frames })
     }
     const xml = buildFcpxml(program.name, clips)
     await fsp.writeFile(res.filePath, xml, 'utf8')

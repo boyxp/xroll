@@ -125,21 +125,36 @@ export async function probeStartTimecode(
   fps: { num: number; den: number }
 ): Promise<{ num: number; den: number } | null> {
   let tc: string | null = null
+  // 时间码轨（tmcd）的帧率可能与视频帧率不同：DJI 59.94fps 视频常把时间码按 29.97 存储。
+  // 必须按时间码「自身」帧率换算成秒，否则会偏差几帧 → 达芬奇按时间码套底时每个片头出现
+  // 一截离线媒体（in 点落在素材真实首帧之前）。回退用视频帧率。
+  let tcRate: { num: number; den: number } | null = null
   try {
     const { stdout } = await execFileP(FFPROBE, [
       '-v',
       'error',
       '-show_entries',
-      'stream_tags=timecode:format_tags=timecode',
+      'stream=codec_tag_string,avg_frame_rate:stream_tags=timecode:format_tags=timecode',
       '-of',
       'json',
       path
     ])
     const j = JSON.parse(stdout)
+    // 优先取时间码轨（tmcd），同时拿它的帧率
     for (const s of j.streams ?? []) {
-      if (s.tags?.timecode) {
+      if (s.codec_tag_string === 'tmcd' && s.tags?.timecode) {
         tc = s.tags.timecode
+        tcRate = parseRate(s.avg_frame_rate)
         break
+      }
+    }
+    // 回退：任意带 timecode 标签的流，再回退容器级标签
+    if (!tc) {
+      for (const s of j.streams ?? []) {
+        if (s.tags?.timecode) {
+          tc = s.tags.timecode
+          break
+        }
       }
     }
     if (!tc && j.format?.tags?.timecode) tc = j.format.tags.timecode
@@ -156,7 +171,8 @@ export async function probeStartTimecode(
   const ss = +m[3]
   const ff = +m[4]
   const dropFrame = /[;.]/.test(tc)
-  const nominal = Math.round(fps.num / fps.den) // 30 / 60 ...
+  const rate = tcRate ?? fps // 时间码帧率优先，缺失回退视频帧率
+  const nominal = Math.round(rate.num / rate.den) // 30 / 60 ...
 
   let frames: number
   if (dropFrame && (nominal === 30 || nominal === 60)) {
@@ -169,14 +185,52 @@ export async function probeStartTimecode(
     frames = (hh * 3600 + mm * 60 + ss) * nominal + ff
   }
   // 秒 = frames * den/num；约分让分子分母更小（与达芬奇一致，值相等即可）
-  let num = frames * fps.den
-  let den = fps.num
+  let num = frames * rate.den
+  let den = rate.num
   const g = gcd(num, den)
   if (g > 1) {
     num /= g
     den /= g
   }
   return { num, den }
+}
+
+// 解析 ffprobe 帧率字符串（"30000/1001" / "60/1"），无效（如 "0/0"）返回 null
+function parseRate(s?: string): { num: number; den: number } | null {
+  if (!s) return null
+  const [n, d] = s.split('/').map((x) => parseInt(x, 10))
+  if (n > 0 && d > 0) return { num: n, den: d }
+  return null
+}
+
+// 视频流精确帧数，用于 FCPXML 片段时长（与达芬奇一致按「视频帧数」取齐）。
+// 注意：不能用容器时长（format.duration），它常被更长的音频轨拉长，四舍五入会多出 1 帧
+// → 片尾多一帧离线。优先 nb_frames，缺失时用视频流时长×帧率。失败返回 null（调用方回退）。
+export async function probeFrameCount(
+  path: string,
+  fps: { num: number; den: number }
+): Promise<number | null> {
+  try {
+    const { stdout } = await execFileP(FFPROBE, [
+      '-v',
+      'error',
+      '-select_streams',
+      'v:0',
+      '-show_entries',
+      'stream=nb_frames,duration',
+      '-of',
+      'json',
+      path
+    ])
+    const s = (JSON.parse(stdout).streams || [])[0] || {}
+    const n = parseInt(s.nb_frames, 10)
+    if (n > 0) return n
+    const d = parseFloat(s.duration)
+    if (d > 0) return Math.max(1, Math.round((d * fps.num) / fps.den))
+  } catch {
+    /* ignore */
+  }
+  return null
 }
 
 function gcd(a: number, b: number): number {

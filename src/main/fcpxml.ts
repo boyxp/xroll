@@ -6,6 +6,7 @@ export interface ExportClip {
   material: Material
   fps: { num: number; den: number } // 帧率 num/den
   startTime?: { num: number; den: number } | null // 源时间码（秒，有理数），用于 asset/clip 的 start
+  frames?: number | null // 视频流精确帧数（探测得到），优先于按时长四舍五入
 }
 
 // 生成 Final Cut Pro X 的 fcpxml（v1.9），按传入顺序拼成一条时间线。
@@ -35,7 +36,8 @@ export function buildFcpxml(programName: string, clips: ExportClip[]): string {
 
   clips.forEach((c, i) => {
     const rid = `r${i + 1}`
-    const frames = framesOf(c.material.durationSec)
+    // 时长优先用探测到的视频精确帧数；缺失时回退按容器时长换算（会有 ±1 帧误差）
+    const frames = c.frames && c.frames > 0 ? c.frames : framesOf(c.material.durationSec)
     const dur = timeOf(frames)
     // 资源名用完整文件名（含扩展名），与达芬奇导出一致 —— 这是达芬奇重链素材时
     // 按名匹配的字段，去掉扩展名/换成别名会导致「找不到素材」。
